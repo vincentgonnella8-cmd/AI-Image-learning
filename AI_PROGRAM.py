@@ -3,12 +3,28 @@ import os
 import uuid
 import shutil
 
+# ----------- CONFIG ----------
 TRAINING_DIR = "training_data"
 os.makedirs(TRAINING_DIR, exist_ok=True)
 
+# Set your admin password here
+DELETE_PASSWORD = st.secrets["admin"]["delete_password"]
+
+# ----------- DELETE ACCESS ----------
+if "can_delete" not in st.session_state:
+    st.session_state.can_delete = False
+
+with st.expander("🔒 Admin Access to Delete Examples"):
+    entered = st.text_input("Enter password to enable delete", type="password")
+    if entered == DELETE_PASSWORD:
+        st.success("✅ Delete access granted.")
+        st.session_state.can_delete = True
+    elif entered:
+        st.error("❌ Incorrect password.")
+
+# ----------- FILE UPLOAD FORM ----------
 st.header("📁 Training Data Uploader")
 
-# --- Upload Form ---
 with st.form("upload_form"):
     uploaded_image = st.file_uploader("Upload Diagram Image (PNG)", type=["png"])
     question_text = st.text_area("Enter Associated Physics Question", height=150)
@@ -30,13 +46,13 @@ with st.form("upload_form"):
         else:
             st.warning("⚠️ Please upload an image and enter a question before submitting.")
 
-# --- Display Current Examples ---
+# ----------- DISPLAY EXISTING EXAMPLES ----------
 st.markdown("---")
 st.subheader("📚 Current Examples in Training Data")
 
 example_dirs = sorted([d for d in os.listdir(TRAINING_DIR) if os.path.isdir(os.path.join(TRAINING_DIR, d))])
 
-# Track if we deleted something to rerun after loop
+# Track if a delete occurred
 if "deleted_example" not in st.session_state:
     st.session_state.deleted_example = False
 
@@ -56,20 +72,20 @@ else:
             if os.path.exists(txt_path):
                 with open(txt_path, "r", encoding="utf-8") as f:
                     question = f.read()
-
                 preview = question[:150].replace("\n", " ") + ("..." if len(question) > 150 else "")
                 with st.expander(f"Question Preview ({example}): {preview}"):
                     st.write(question)
         with col3:
-            if st.button("🗑️ Delete", key=f"del_{example}"):
-                try:
-                    shutil.rmtree(path)
-                    st.success(f"Deleted example `{example}`")
-                    st.session_state.deleted_example = True
-                except Exception as e:
-                    st.error(f"Error deleting `{example}`: {e}")
+            if st.session_state.can_delete:
+                if st.button("🗑️ Delete", key=f"del_{example}"):
+                    try:
+                        shutil.rmtree(path)
+                        st.success(f"Deleted example `{example}`")
+                        st.session_state.deleted_example = True
+                    except Exception as e:
+                        st.error(f"Error deleting `{example}`: {e}")
 
-# Rerun only once after deletion(s)
+# Refresh after delete
 if st.session_state.deleted_example:
     st.session_state.deleted_example = False
     st.experimental_rerun()

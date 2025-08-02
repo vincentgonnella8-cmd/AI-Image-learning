@@ -1,1 +1,6 @@
+streamlit
+openai
+python-dotenv
+svgwrite
+base64
 

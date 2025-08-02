@@ -1,6 +1,6 @@
-streamlit
-openai
 python-dotenv
 svgwrite
-base64
-
+streamlit
+openai
+pillow
+requests

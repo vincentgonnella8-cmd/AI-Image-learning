@@ -36,6 +36,10 @@ st.subheader("📚 Current Examples in Training Data")
 
 example_dirs = sorted([d for d in os.listdir(TRAINING_DIR) if os.path.isdir(os.path.join(TRAINING_DIR, d))])
 
+# Track if we deleted something to rerun after loop
+if "deleted_example" not in st.session_state:
+    st.session_state.deleted_example = False
+
 if not example_dirs:
     st.info("No examples currently found in the training data folder.")
 else:
@@ -44,21 +48,28 @@ else:
         img_path = os.path.join(path, "diagram.png")
         txt_path = os.path.join(path, "question.txt")
 
-        col1, col2, col3 = st.columns([1, 4, 1])
+        col1, col2, col3 = st.columns([1, 5, 1])
         with col1:
             if os.path.exists(img_path):
                 st.image(img_path, width=160)
         with col2:
             if os.path.exists(txt_path):
-                with open(txt_path, "r") as f:
+                with open(txt_path, "r", encoding="utf-8") as f:
                     question = f.read()
-                st.markdown(f"**{example}**")
-                st.text_area(f"Question for {example}", value=question, height=150, key=f"qa_{example}", disabled=True)
+
+                preview = question[:150].replace("\n", " ") + ("..." if len(question) > 150 else "")
+                with st.expander(f"Question Preview ({example}): {preview}"):
+                    st.write(question)
         with col3:
             if st.button("🗑️ Delete", key=f"del_{example}"):
                 try:
                     shutil.rmtree(path)
                     st.success(f"Deleted example `{example}`")
-                    st.experimental_rerun()
+                    st.session_state.deleted_example = True
                 except Exception as e:
                     st.error(f"Error deleting `{example}`: {e}")
+
+# Rerun only once after deletion(s)
+if st.session_state.deleted_example:
+    st.session_state.deleted_example = False
+    st.experimental_rerun()

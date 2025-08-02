@@ -1,16 +1,50 @@
 import streamlit as st
 import os
-import uuid
+from PIL import Image
 import shutil
 
-# ----------- CONFIG ----------
-TRAINING_DIR = "training_data"
-os.makedirs(TRAINING_DIR, exist_ok=True)
+# Load delete password from secrets
+DELETE_PASSWORD = st.secrets.get("admin", {}).get("delete_password", "letmein")
 
-# Set your admin password here
-DELETE_PASSWORD = st.secrets["admin"]["delete_password"]
+# Paths
+DATA_DIR = "training_data"
 
-# ----------- DELETE ACCESS ----------
+st.set_page_config(page_title="Physics Diagram Trainer", layout="wide")
+st.title("📚 AI Physics Diagram Trainer")
+
+# Ensure training data directory exists
+os.makedirs(DATA_DIR, exist_ok=True)
+
+# --- Section: Upload New Training Example ---
+st.header("➕ Add New Training Example")
+col1, col2 = st.columns(2)
+
+with col1:
+    uploaded_image = st.file_uploader("Upload Diagram (PNG)", type=["png"])
+with col2:
+    question_text = st.text_area("Enter Physics Question", height=150)
+
+if uploaded_image and question_text:
+    example_name = question_text[:40].strip().replace(" ", "_").replace("/", "-")
+    example_path = os.path.join(DATA_DIR, example_name)
+    os.makedirs(example_path, exist_ok=True)
+
+    # Save image
+    image_save_path = os.path.join(example_path, "diagram.png")
+    with open(image_save_path, "wb") as f:
+        f.write(uploaded_image.read())
+
+    # Save question
+    question_save_path = os.path.join(example_path, "question.txt")
+    with open(question_save_path, "w") as f:
+        f.write(question_text)
+
+    st.success(f"Saved new example to {example_name}")
+    st.experimental_rerun()
+
+# --- Section: Admin Access for Deletion ---
+st.header("🛠 Manage Existing Training Data")
+
 if "can_delete" not in st.session_state:
     st.session_state.can_delete = False
 
@@ -22,70 +56,37 @@ with st.expander("🔒 Admin Access to Delete Examples"):
     elif entered:
         st.error("❌ Incorrect password.")
 
-# ----------- FILE UPLOAD FORM ----------
-st.header("📁 Training Data Uploader")
-
-with st.form("upload_form"):
-    uploaded_image = st.file_uploader("Upload Diagram Image (PNG)", type=["png"])
-    question_text = st.text_area("Enter Associated Physics Question", height=150)
-    submitted = st.form_submit_button("Save Example")
-
-    if submitted:
-        if uploaded_image and question_text.strip():
-            example_id = f"example_{uuid.uuid4().hex[:8]}"
-            folder_path = os.path.join(TRAINING_DIR, example_id)
-            os.makedirs(folder_path, exist_ok=True)
-
-            with open(os.path.join(folder_path, "diagram.png"), "wb") as f:
-                f.write(uploaded_image.getbuffer())
-
-            with open(os.path.join(folder_path, "question.txt"), "w", encoding="utf-8") as f:
-                f.write(question_text.strip())
-
-            st.success(f"✅ Saved new example in `{folder_path}`")
-        else:
-            st.warning("⚠️ Please upload an image and enter a question before submitting.")
-
-# ----------- DISPLAY EXISTING EXAMPLES ----------
-st.markdown("---")
-st.subheader("📚 Current Examples in Training Data")
-
-example_dirs = sorted([d for d in os.listdir(TRAINING_DIR) if os.path.isdir(os.path.join(TRAINING_DIR, d))])
-
-# Track if a delete occurred
-if "deleted_example" not in st.session_state:
-    st.session_state.deleted_example = False
-
-if not example_dirs:
-    st.info("No examples currently found in the training data folder.")
+# --- Section: Show Existing Examples ---
+examples = sorted(os.listdir(DATA_DIR))
+if not examples:
+    st.info("No training data examples found yet.")
 else:
-    for example in example_dirs:
-        path = os.path.join(TRAINING_DIR, example)
-        img_path = os.path.join(path, "diagram.png")
-        txt_path = os.path.join(path, "question.txt")
+    for example in examples:
+        example_path = os.path.join(DATA_DIR, example)
+        image_path = os.path.join(example_path, "diagram.png")
+        question_path = os.path.join(example_path, "question.txt")
 
-        col1, col2, col3 = st.columns([1, 5, 1])
+        if not (os.path.isfile(image_path) and os.path.isfile(question_path)):
+            continue  # skip malformed examples
+
+        col1, col2 = st.columns([2, 3])
         with col1:
-            if os.path.exists(img_path):
-                st.image(img_path, width=160)
-        with col2:
-            if os.path.exists(txt_path):
-                with open(txt_path, "r", encoding="utf-8") as f:
-                    question = f.read()
-                preview = question[:150].replace("\n", " ") + ("..." if len(question) > 150 else "")
-                with st.expander(f"Question Preview ({example}): {preview}"):
-                    st.write(question)
-        with col3:
-            if st.session_state.can_delete:
-                if st.button("🗑️ Delete", key=f"del_{example}"):
-                    try:
-                        shutil.rmtree(path)
-                        st.success(f"Deleted example `{example}`")
-                        st.session_state.deleted_example = True
-                    except Exception as e:
-                        st.error(f"Error deleting `{example}`: {e}")
+            with open(question_path, "r") as f:
+                preview = f.read()
 
-# Refresh after delete
-if st.session_state.deleted_example:
-    st.session_state.deleted_example = False
-    st.experimental_rerun()
+            st.markdown(f"**Example:** `{example}`")
+            with st.expander("📄 Preview Question"):
+                st.text_area("Full Question:", preview, height=200)
+
+        with col2:
+            st.markdown(f"**Diagram:**")
+            st.image(image_path, width=150)
+            with st.expander("🔍 Expand Diagram Preview"):
+                st.image(image_path, use_column_width=True)
+
+        if st.session_state.can_delete:
+            delete_button = st.button(f"🗑 Delete {example}", key=f"del_{example}")
+            if delete_button:
+                shutil.rmtree(example_path)
+                st.success(f"Deleted {example}")
+                st.experimental_rerun()

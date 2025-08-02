@@ -1,6 +1,7 @@
 import streamlit as st
 import os
 import uuid
+import shutil
 
 TRAINING_DIR = "training_data"
 os.makedirs(TRAINING_DIR, exist_ok=True)
@@ -10,7 +11,7 @@ st.header("📁 Training Data Uploader")
 # --- Upload Form ---
 with st.form("upload_form"):
     uploaded_image = st.file_uploader("Upload Diagram Image (PNG)", type=["png"])
-    question_text = st.text_area("Enter Associated Physics Question")
+    question_text = st.text_area("Enter Associated Physics Question", height=150)
     submitted = st.form_submit_button("Save Example")
 
     if submitted:
@@ -33,17 +34,17 @@ with st.form("upload_form"):
 st.markdown("---")
 st.subheader("📚 Current Examples in Training Data")
 
-example_dirs = [d for d in os.listdir(TRAINING_DIR) if os.path.isdir(os.path.join(TRAINING_DIR, d))]
+example_dirs = sorted([d for d in os.listdir(TRAINING_DIR) if os.path.isdir(os.path.join(TRAINING_DIR, d))])
 
 if not example_dirs:
     st.info("No examples currently found in the training data folder.")
 else:
-    for example in sorted(example_dirs):
+    for example in example_dirs:
         path = os.path.join(TRAINING_DIR, example)
         img_path = os.path.join(path, "diagram.png")
         txt_path = os.path.join(path, "question.txt")
 
-        col1, col2 = st.columns([1, 2])
+        col1, col2, col3 = st.columns([1, 4, 1])
         with col1:
             if os.path.exists(img_path):
                 st.image(img_path, width=160)
@@ -51,4 +52,13 @@ else:
             if os.path.exists(txt_path):
                 with open(txt_path, "r") as f:
                     question = f.read()
-                st.markdown(f"**{example}**\n\n{question}")
+                st.markdown(f"**{example}**")
+                st.text_area(f"Question for {example}", value=question, height=150, key=f"qa_{example}", disabled=True)
+        with col3:
+            if st.button("🗑️ Delete", key=f"del_{example}"):
+                try:
+                    shutil.rmtree(path)
+                    st.success(f"Deleted example `{example}`")
+                    st.experimental_rerun()
+                except Exception as e:
+                    st.error(f"Error deleting `{example}`: {e}")

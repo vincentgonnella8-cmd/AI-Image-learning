@@ -2,26 +2,34 @@ import streamlit as st
 import os
 from PIL import Image
 import shutil
+from datetime import datetime
 
 # Load delete password from secrets
 DELETE_PASSWORD = st.secrets.get("admin", {}).get("delete_password", "letmein")
 
 # Paths
 DATA_DIR = "training_data"
+TRASH_DIR = "trash_data"
 
 st.set_page_config(page_title="Physics Diagram Trainer", layout="wide")
 st.title("📚 AI Physics Diagram Trainer")
 
-# Ensure training data directory exists
+# Ensure necessary directories exist
 os.makedirs(DATA_DIR, exist_ok=True)
+os.makedirs(TRASH_DIR, exist_ok=True)
 
-# --- Section: Upload New Training Example ---
-st.header("➕ Add New Training Example")
-with st.container():
-    upload_cols = st.columns([2, 3])
-    with upload_cols[0]:
+# --- Tabs ---
+tabs = st.tabs(["Add & Review Examples", "🔐 Admin Panel"])
+
+# --- Tab 1: Upload and View Examples ---
+with tabs[0]:
+    # --- Section: Upload New Training Example ---
+    st.header("➕ Add New Training Example")
+    col1, col2 = st.columns(2)
+
+    with col1:
         uploaded_image = st.file_uploader("Upload Diagram (PNG)", type=["png"])
-    with upload_cols[1]:
+    with col2:
         question_text = st.text_area("Enter Physics Question", height=150)
 
     if uploaded_image and question_text:
@@ -43,55 +51,80 @@ with st.container():
             st.success(f"Saved new example to {example_name}")
             st.rerun()
 
-# --- Section: Admin Access for Deletion ---
-st.header("🛠 Manage Existing Training Data")
+    # --- Section: Show Existing Examples ---
+    st.header("📂 Existing Training Data Examples")
+    examples = sorted(os.listdir(DATA_DIR))
+    if not examples:
+        st.info("No training data examples found yet.")
+    else:
+        for example in examples:
+            example_path = os.path.join(DATA_DIR, example)
+            image_path = os.path.join(example_path, "diagram.png")
+            question_path = os.path.join(example_path, "question.txt")
 
-if "can_delete" not in st.session_state:
-    st.session_state.can_delete = False
+            if not (os.path.isfile(image_path) and os.path.isfile(question_path)):
+                continue  # skip malformed examples
 
-with st.expander("🔒 Admin Access to Delete Examples"):
-    entered = st.text_input("Enter password to enable delete", type="password")
-    if entered == DELETE_PASSWORD:
-        st.success("✅ Delete access granted.")
-        st.session_state.can_delete = True
-    elif entered:
-        st.error("❌ Incorrect password.")
+            col1, col2 = st.columns([3, 2])
+            with col1:
+                with open(question_path, "r") as f:
+                    preview = f.read()
 
-# --- Section: Show Existing Examples ---
-examples = sorted(os.listdir(DATA_DIR))
-if not examples:
-    st.info("No training data examples found yet.")
-else:
-    for example in examples:
-        example_path = os.path.join(DATA_DIR, example)
-        image_path = os.path.join(example_path, "diagram.png")
-        question_path = os.path.join(example_path, "question.txt")
+                st.markdown(f"**Example:** `{example}`")
+                with st.expander("📄 Preview Question"):
+                    st.text_area("Full Question:", preview, height=200)
 
-        if not (os.path.isfile(image_path) and os.path.isfile(question_path)):
-            continue  # skip malformed examples
-
-        with st.container():
-            st.markdown("---")
-            row_cols = st.columns([1, 2, 1])
-
-            with row_cols[0]:
-                st.markdown(f"**Diagram: `{example}`**")
+            with col2:
+                st.markdown(f"**Diagram:**")
                 st.image(image_path, width=150)
                 with st.expander("🔍 Expand Diagram Preview"):
                     st.image(image_path, use_column_width=True)
 
-            with row_cols[1]:
-                with open(question_path, "r") as f:
-                    preview = f.read()
-                st.markdown(f"**Question Preview:**")
-                st.text_area("Full Question", preview, height=200, key=f"q_{example}")
+# --- Tab 2: Admin Panel ---
+with tabs[1]:
+    st.header("🔐 Admin Panel")
 
-            with row_cols[2]:
-                if st.session_state.can_delete:
-                    if st.button(f"🗑 Delete", key=f"del_{example}"):
-                        try:
-                            shutil.rmtree(example_path)
-                            st.success(f"Deleted {example}")
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"Error deleting {example}: {e}")
+    if "can_delete" not in st.session_state:
+        st.session_state.can_delete = False
+
+    with st.expander("🔒 Enter Admin Password"):
+        entered = st.text_input("Enter password to enable delete", type="password")
+        if entered == DELETE_PASSWORD:
+            st.success("✅ Delete access granted.")
+            st.session_state.can_delete = True
+        elif entered:
+            st.error("❌ Incorrect password.")
+
+    if st.session_state.can_delete:
+        st.subheader("🗑 Delete Examples")
+        examples = sorted(os.listdir(DATA_DIR))
+        for example in examples:
+            example_path = os.path.join(DATA_DIR, example)
+            col_del, _ = st.columns([1, 5])
+            with col_del:
+                delete_button = st.button(f"🗑 Delete {example}", key=f"del_{example}")
+                if delete_button:
+                    try:
+                        trash_path = os.path.join(TRASH_DIR, f"{example}_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
+                        shutil.move(example_path, trash_path)
+                        st.success(f"Moved {example} to trash")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error deleting {example}: {e}")
+
+        st.subheader("♻️ Recover Deleted Examples")
+        trashed = sorted(os.listdir(TRASH_DIR))
+        for trashed_example in trashed:
+            trashed_path = os.path.join(TRASH_DIR, trashed_example)
+            col_rec, _ = st.columns([1, 5])
+            with col_rec:
+                recover_button = st.button(f"♻️ Recover {trashed_example}", key=f"rec_{trashed_example}")
+                if recover_button:
+                    try:
+                        original_name = "_".join(trashed_example.split("_")[:-2])  # approximate original
+                        restored_path = os.path.join(DATA_DIR, original_name)
+                        shutil.move(trashed_path, restored_path)
+                        st.success(f"Recovered {trashed_example}")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error recovering {trashed_example}: {e}")

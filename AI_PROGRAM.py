@@ -17,31 +17,31 @@ os.makedirs(DATA_DIR, exist_ok=True)
 
 # --- Section: Upload New Training Example ---
 st.header("➕ Add New Training Example")
-col1, col2 = st.columns(2)
+with st.container():
+    upload_cols = st.columns([2, 3])
+    with upload_cols[0]:
+        uploaded_image = st.file_uploader("Upload Diagram (PNG)", type=["png"])
+    with upload_cols[1]:
+        question_text = st.text_area("Enter Physics Question", height=150)
 
-with col1:
-    uploaded_image = st.file_uploader("Upload Diagram (PNG)", type=["png"])
-with col2:
-    question_text = st.text_area("Enter Physics Question", height=150)
+    if uploaded_image and question_text:
+        if st.button("✅ Finalize Upload"):
+            example_name = question_text[:40].strip().replace(" ", "_").replace("/", "-")
+            example_path = os.path.join(DATA_DIR, example_name)
+            os.makedirs(example_path, exist_ok=True)
 
-if uploaded_image and question_text:
-    if st.button("✅ Finalize Upload"):
-        example_name = question_text[:40].strip().replace(" ", "_").replace("/", "-")
-        example_path = os.path.join(DATA_DIR, example_name)
-        os.makedirs(example_path, exist_ok=True)
+            # Save image
+            image_save_path = os.path.join(example_path, "diagram.png")
+            with open(image_save_path, "wb") as f:
+                f.write(uploaded_image.read())
 
-        # Save image
-        image_save_path = os.path.join(example_path, "diagram.png")
-        with open(image_save_path, "wb") as f:
-            f.write(uploaded_image.read())
+            # Save question
+            question_save_path = os.path.join(example_path, "question.txt")
+            with open(question_save_path, "w") as f:
+                f.write(question_text)
 
-        # Save question
-        question_save_path = os.path.join(example_path, "question.txt")
-        with open(question_save_path, "w") as f:
-            f.write(question_text)
-
-        st.success(f"Saved new example to {example_name}")
-        st.rerun()
+            st.success(f"Saved new example to {example_name}")
+            st.rerun()
 
 # --- Section: Admin Access for Deletion ---
 st.header("🛠 Manage Existing Training Data")
@@ -70,29 +70,28 @@ else:
         if not (os.path.isfile(image_path) and os.path.isfile(question_path)):
             continue  # skip malformed examples
 
-        col1, col2 = st.columns([2, 3])
-        with col1:
-            with open(question_path, "r") as f:
-                preview = f.read()
+        with st.container():
+            st.markdown("---")
+            row_cols = st.columns([1, 2, 1])
 
-            st.markdown(f"**Example:** `{example}`")
-            with st.expander("📄 Preview Question"):
-                st.text_area("Full Question:", preview, height=200)
+            with row_cols[0]:
+                st.markdown(f"**Diagram: `{example}`**")
+                st.image(image_path, width=150)
+                with st.expander("🔍 Expand Diagram Preview"):
+                    st.image(image_path, use_column_width=True)
 
-        with col2:
-            st.markdown(f"**Diagram:**")
-            st.image(image_path, width=150)
-            with st.expander("🔍 Expand Diagram Preview"):
-                st.image(image_path, use_column_width=True)
+            with row_cols[1]:
+                with open(question_path, "r") as f:
+                    preview = f.read()
+                st.markdown(f"**Question Preview:**")
+                st.text_area("Full Question", preview, height=200, key=f"q_{example}")
 
-        if st.session_state.can_delete:
-            col_del, _ = st.columns([1, 5])
-            with col_del:
-                delete_button = st.button(f"🗑 Delete {example}", key=f"del_{example}")
-                if delete_button:
-                    try:
-                        shutil.rmtree(example_path)
-                        st.success(f"Deleted {example}")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Error deleting {example}: {e}")
+            with row_cols[2]:
+                if st.session_state.can_delete:
+                    if st.button(f"🗑 Delete", key=f"del_{example}"):
+                        try:
+                            shutil.rmtree(example_path)
+                            st.success(f"Deleted {example}")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error deleting {example}: {e}")

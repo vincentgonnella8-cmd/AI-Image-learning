@@ -41,7 +41,7 @@ if uploaded_image and question_text:
             f.write(question_text)
 
         st.success(f"Saved new example to {example_name}")
-        st.experimental_rerun()
+        st.rerun()
 
 # --- Section: Admin Access for Deletion ---
 st.header("🛠 Manage Existing Training Data")
@@ -93,6 +93,6 @@ else:
                     try:
                         shutil.rmtree(example_path)
                         st.success(f"Deleted {example}")
-                        st.experimental_rerun()
+                        st.rerun()
                     except Exception as e:
                         st.error(f"Error deleting {example}: {e}")

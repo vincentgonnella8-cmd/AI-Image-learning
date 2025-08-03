@@ -25,22 +25,23 @@ with col2:
     question_text = st.text_area("Enter Physics Question", height=150)
 
 if uploaded_image and question_text:
-    example_name = question_text[:40].strip().replace(" ", "_").replace("/", "-")
-    example_path = os.path.join(DATA_DIR, example_name)
-    os.makedirs(example_path, exist_ok=True)
+    if st.button("✅ Finalize Upload"):
+        example_name = question_text[:40].strip().replace(" ", "_").replace("/", "-")
+        example_path = os.path.join(DATA_DIR, example_name)
+        os.makedirs(example_path, exist_ok=True)
 
-    # Save image
-    image_save_path = os.path.join(example_path, "diagram.png")
-    with open(image_save_path, "wb") as f:
-        f.write(uploaded_image.read())
+        # Save image
+        image_save_path = os.path.join(example_path, "diagram.png")
+        with open(image_save_path, "wb") as f:
+            f.write(uploaded_image.read())
 
-    # Save question
-    question_save_path = os.path.join(example_path, "question.txt")
-    with open(question_save_path, "w") as f:
-        f.write(question_text)
+        # Save question
+        question_save_path = os.path.join(example_path, "question.txt")
+        with open(question_save_path, "w") as f:
+            f.write(question_text)
 
-    st.success(f"Saved new example to {example_name}")
-    st.experimental_rerun()
+        st.success(f"Saved new example to {example_name}")
+        st.experimental_rerun()
 
 # --- Section: Admin Access for Deletion ---
 st.header("🛠 Manage Existing Training Data")
@@ -85,8 +86,13 @@ else:
                 st.image(image_path, use_column_width=True)
 
         if st.session_state.can_delete:
-            delete_button = st.button(f"🗑 Delete {example}", key=f"del_{example}")
-            if delete_button:
-                shutil.rmtree(example_path)
-                st.success(f"Deleted {example}")
-                st.experimental_rerun()
+            col_del, _ = st.columns([1, 5])
+            with col_del:
+                delete_button = st.button(f"🗑 Delete {example}", key=f"del_{example}")
+                if delete_button:
+                    try:
+                        shutil.rmtree(example_path)
+                        st.success(f"Deleted {example}")
+                        st.experimental_rerun()
+                    except Exception as e:
+                        st.error(f"Error deleting {example}: {e}")
